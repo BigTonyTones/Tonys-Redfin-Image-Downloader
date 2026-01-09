@@ -2,7 +2,7 @@
 
 I made this tool to quickly grab high-res photos from Redfin listings. It has a nice dark theme, it's fast, and it automatically organizes everything into folders by address so you don't have to.
 
-![App Preview](redfin_downloader_mockup_1767986578664.png)
+![App Preview](assets/screenshot.png)
 
 ### What it does:
 - **Grabs High-Res Photos**: Pulls the best quality images directly from Redfin.
