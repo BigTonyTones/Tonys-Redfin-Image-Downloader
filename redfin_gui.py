@@ -59,7 +59,7 @@ import glob
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.8.0"
+        self.version = "1.8.1"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -258,19 +258,9 @@ class RedfinDownloaderGUI:
         explorer_container = ttk.Frame(left_frame)
         explorer_container.pack(fill=tk.BOTH, expand=True)
         
-        v_scrollbar = ttk.Scrollbar(explorer_container)
-        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        h_scrollbar = ttk.Scrollbar(explorer_container, orient=tk.HORIZONTAL)
-        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # Using Treeview for explorer look
-        self.explorer_tree = ttk.Treeview(explorer_container, show='tree', selectmode='browse', 
-                                          yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        # Using Treeview for explorer look (Removed visible scrollbars for cleaner look)
+        self.explorer_tree = ttk.Treeview(explorer_container, show='tree', selectmode='browse')
         self.explorer_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        v_scrollbar.config(command=self.explorer_tree.yview)
-        h_scrollbar.config(command=self.explorer_tree.xview)
         
         # Auto-configure column to stretch
         self.explorer_tree.column("#0", stretch=True, width=300)
