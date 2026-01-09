@@ -59,7 +59,7 @@ import glob
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.7.6"
+        self.version = "1.8.0"
         
         # Performance & DPI Optimizations for Windows
         try:
