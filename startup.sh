@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "============================================"
-echo "Tonys Redfin Zillow Image Downloader v1.5"
+echo "Tonys Redfin Zillow Image Downloader v1.7.6"
 echo "============================================"
 echo ""
 

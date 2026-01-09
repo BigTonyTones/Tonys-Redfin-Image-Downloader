@@ -52,13 +52,14 @@ import re
 from urllib.parse import urljoin, urlparse
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageTk
 import glob
 
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.5"
+        self.version = "1.7.6"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -93,6 +94,7 @@ class RedfinDownloaderGUI:
         self.photo_references = []
         self.thumbnail_size = 400
         self.thumbnail_cache = {}
+        self.property_details = {}  # Store property details (price, beds, baths, etc.)
         self.download_cancelled = False
         
         self.setup_styles()
@@ -307,6 +309,44 @@ class RedfinDownloaderGUI:
         ttk.Button(gallery_header, text="Delete Property", command=self.delete_property).pack(side=tk.RIGHT, padx=3)
         ttk.Button(gallery_header, text="Open Folder", command=self.open_folder).pack(side=tk.RIGHT, padx=3)
         
+        # Property Details Panel
+        details_frame = ttk.LabelFrame(right_frame, text=" Property Details ", padding=15)
+        details_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Details grid
+        details_grid = ttk.Frame(details_frame)
+        details_grid.pack(fill=tk.X)
+        
+        # Price
+        price_frame = ttk.Frame(details_grid)
+        price_frame.pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Label(price_frame, text="Price:", style="Sub.TLabel").pack(anchor=tk.W)
+        self.price_label = ttk.Label(price_frame, text="—", font=("Segoe UI", 12, "bold"), foreground=self.colors['accent'])
+        self.price_label.pack(anchor=tk.W)
+        
+        # Beds/Baths/SqFt
+        stats_frame = ttk.Frame(details_grid)
+        stats_frame.pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Label(stats_frame, text="Beds | Baths | Sq Ft:", style="Sub.TLabel").pack(anchor=tk.W)
+        self.stats_label = ttk.Label(stats_frame, text="—", font=("Segoe UI", 10))
+        self.stats_label.pack(anchor=tk.W)
+        
+        # Description
+        desc_container = ttk.Frame(details_frame)
+        desc_container.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        ttk.Label(desc_container, text="Description:", style="Sub.TLabel").pack(anchor=tk.W)
+        self.description_label = ttk.Label(desc_container, text="No property selected", 
+                                          wraplength=800, justify=tk.LEFT, style="TLabel")
+        self.description_label.pack(anchor=tk.W, pady=(5, 0))
+        
+        # URL section
+        url_container = ttk.Frame(details_frame)
+        url_container.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(url_container, text="Listing URL:", style="Sub.TLabel").pack(side=tk.LEFT, padx=(0, 10))
+        self.open_url_btn = ttk.Button(url_container, text="Open in Browser", command=self.open_listing_url, state=tk.DISABLED)
+        self.open_url_btn.pack(side=tk.LEFT)
+        self.listing_url = None
+        
         # Info bar
         info_frame = ttk.Frame(right_frame)
         info_frame.pack(fill=tk.X, pady=(0, 10))
@@ -353,9 +393,9 @@ class RedfinDownloaderGUI:
         status_bar = tk.Frame(self.root, bg=self.colors['accent'], height=25)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
-        self.stats_label = tk.Label(status_bar, text=f"Ready | Version {self.version} | Connected", 
+        self.footer_stats_label = tk.Label(status_bar, text=f"Ready | Version {self.version} | Connected", 
                                     bg=self.colors['accent'], fg="white", font=("Segoe UI", 8, "bold"), padx=10)
-        self.stats_label.pack(side=tk.LEFT)
+        self.footer_stats_label.pack(side=tk.LEFT)
         
         # Add tiny resize grip look-alike
         tk.Label(status_bar, text=" ● Tonys Downloader Engine Active ", bg=self.colors['accent'], fg="white", 
@@ -447,12 +487,59 @@ class RedfinDownloaderGUI:
             messagebox.showwarning("No Images", f"No images found in {property_name}")
             return
         
+        # Load property details
+        self.load_property_details(property_path)
+        
         # Clear cache when loading new property
         self.thumbnail_cache.clear()
         
         self.property_label.config(text=property_name)
-        self.image_counter.config(text=f"{len(self.current_images)} images")
+        self.image_counter.config(text=f"{len(self.current_images)} images loaded")
         self.display_gallery()
+    
+    def load_property_details(self, property_path):
+        """Load and display property details from JSON file."""
+        import json
+        details_file = os.path.join(property_path, 'property_details.json')
+        
+        if os.path.exists(details_file):
+            try:
+                with open(details_file, 'r') as f:
+                    details = json.load(f)
+                
+                # Update UI with details
+                self.price_label.config(text=details.get('price', 'N/A'))
+                
+                stats_text = f"{details.get('beds', '—')} | {details.get('baths', '—')} | {details.get('sqft', '—')}"
+                self.stats_label.config(text=stats_text)
+                
+                self.description_label.config(text=details.get('description', 'No description available'))
+                
+                # Store and enable URL button
+                self.listing_url = details.get('url')
+                if self.listing_url:
+                    self.open_url_btn.config(state=tk.NORMAL)
+                else:
+                    self.open_url_btn.config(state=tk.DISABLED)
+            except Exception as e:
+                print(f"Error loading property details: {e}")
+                self.reset_property_details()
+        else:
+            self.reset_property_details()
+    
+    def reset_property_details(self):
+        """Reset property details to default values."""
+        self.price_label.config(text="—")
+        self.stats_label.config(text="—")
+        self.description_label.config(text="No details available for this property")
+        self.listing_url = None
+        self.open_url_btn.config(state=tk.DISABLED)
+    
+    def open_listing_url(self):
+        """Open the property listing URL in default browser."""
+        if self.listing_url:
+            import webbrowser
+            webbrowser.open(self.listing_url)
     
     def display_gallery(self):
         """Display all images as thumbnails in a scrollable gallery."""
@@ -852,6 +939,83 @@ class RedfinDownloaderGUI:
             if not os.path.exists(property_folder):
                 os.makedirs(property_folder)
             
+            # Extract property details
+            details = {
+                'address': address,
+                'url': url,
+                'price': 'N/A',
+                'beds': 'N/A',
+                'baths': 'N/A',
+                'sqft': 'N/A',
+                'description': 'No description available'
+            }
+            
+            try:
+                # Extract price - multiple possible patterns for Redfin
+                price_tag = soup.find('div', class_='statsValue') or \
+                            soup.find('span', {'data-rf-test-id': 'av-price'}) or \
+                            soup.find('div', {'data-rf-test-id': 'abp-price'})
+                if price_tag:
+                    details['price'] = price_tag.get_text(strip=True)
+                
+                # Extract beds/baths/sqft from stats - multiple Redfin patterns
+                # Pattern 1: stat-block
+                stats_divs = soup.find_all('div', class_='stat-block')
+                for stat in stats_divs:
+                    span = stat.find(['span', 'div'], class_='statsValue')
+                    label = stat.find(['span', 'div'], class_='statsLabel')
+                    if span and label:
+                        value = span.get_text(strip=True)
+                        label_text = label.get_text(strip=True).lower()
+                        if 'bed' in label_text: details['beds'] = value
+                        elif 'bath' in label_text: details['baths'] = value
+                        elif 'sq' in label_text: details['sqft'] = value
+                
+                # Pattern 2: data-rf-test-id
+                if details['beds'] == 'N/A':
+                    beds_tag = soup.find(['div', 'span'], {'data-rf-test-id': 'abp-beds'}) or \
+                               soup.find(['div', 'span'], {'data-rf-test-id': 'av-beds'})
+                    if beds_tag: details['beds'] = beds_tag.get_text(strip=True).split()[0]
+                
+                if details['baths'] == 'N/A':
+                    baths_tag = soup.find(['div', 'span'], {'data-rf-test-id': 'abp-baths'}) or \
+                                soup.find(['div', 'span'], {'data-rf-test-id': 'av-baths'})
+                    if baths_tag: details['baths'] = baths_tag.get_text(strip=True).split()[0]
+                
+                if details['sqft'] == 'N/A':
+                    sqft_tag = soup.find(['div', 'span'], {'data-rf-test-id': 'abp-sqFt'}) or \
+                               soup.find(['div', 'span'], {'data-rf-test-id': 'av-sqFt'})
+                    if sqft_tag: details['sqft'] = sqft_tag.get_text(strip=True).split()[0]
+
+                # Pattern 3: Generic span search for keywords if still N/A
+                if details['beds'] == 'N/A' or details['baths'] == 'N/A':
+                    for span in soup.find_all('span'):
+                        text = span.get_text().lower()
+                        if 'bed' in text and ' ' in text and details['beds'] == 'N/A':
+                            val = text.split()[0]
+                            if val.isdigit(): details['beds'] = val
+                        elif 'bath' in text and ' ' in text and details['baths'] == 'N/A':
+                            val = text.split()[0]
+                            if val.isdigit(): details['baths'] = val
+                        elif 'sq' in text and 'ft' in text and details['sqft'] == 'N/A':
+                            val = text.split()[0].replace(',', '')
+                            if val.isdigit(): details['sqft'] = val
+                
+                # Extract description
+                desc_tag = soup.find('div', class_='remarks') or \
+                           soup.find('div', {'id': 'marketing-remarks'}) or \
+                           soup.find('p', class_='property-description')
+                if desc_tag:
+                    details['description'] = desc_tag.get_text(strip=True)[:500]
+            except Exception as e:
+                print(f"Error extracting Redfin property details: {e}")
+            
+            # Save details to JSON file
+            import json
+            details_file = os.path.join(property_folder, 'property_details.json')
+            with open(details_file, 'w') as f:
+                json.dump(details, f, indent=2)
+            
             # Extract images - try multiple patterns
             images = []
             
@@ -883,53 +1047,60 @@ class RedfinDownloaderGUI:
                 self.root.after(0, lambda: self.download_error("No images found on this page"))
                 return
             
-            # Download images
+            # Download images using ThreadPool
             downloaded = 0
             total = len(images)
             
-            for idx, (cdn_num, photo_id, photo_name) in enumerate(images, 1):
-                # Check if download was cancelled
+            # Use a thread-safe counter or just calculate at the end
+            # For progress updates, we'll use as_completed
+            
+            def download_task(item):
+                idx, (cdn_num, photo_id, photo_name) = item
                 if self.download_cancelled:
-                    self.root.after(0, lambda: self.progress_var.set(f"Cancelled - Downloaded {downloaded}/{total}"))
-                    return
-                    
-                self.root.after(0, lambda i=idx, t=total: self.progress_var.set(f"Downloading {i}/{t}..."))
+                    return False
                 
-                # Try different URL formats using the CDN number from the page
+                # Try different URL formats
                 formats = [
                     ('webp', f"https://ssl.cdn-redfin.com/photo/{cdn_num}/bigphoto/{photo_id}/{photo_name}.webp"),
                     ('jpg', f"https://ssl.cdn-redfin.com/photo/{cdn_num}/bigphoto/{photo_id}/{photo_name}.jpg"),
                 ]
                 
-                success = False
                 for ext, img_url in formats:
                     try:
                         filepath = os.path.join(property_folder, f"{idx:03d}_{photo_name}.{ext}")
-                        
                         if os.path.exists(filepath):
-                            downloaded += 1
-                            success = True
-                            break
+                            return True
                         
                         img_response = requests.get(img_url, headers=headers, timeout=10)
                         if img_response.status_code == 200 and len(img_response.content) > 1000:
                             with open(filepath, 'wb') as f:
                                 f.write(img_response.content)
-                            downloaded += 1
-                            success = True
-                            print(f"Downloaded: {img_url}")
-                            break
-                        else:
-                            print(f"Failed {img_response.status_code}: {img_url}")
-                    except Exception as e:
-                        print(f"Error downloading {img_url}: {e}")
+                            return True
+                    except:
                         continue
+                return False
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(download_task, item): item for item in enumerate(images, 1)}
+                completed = 0
                 
-                if not success:
-                    print(f"Could not download image {idx}: {photo_id}/{photo_name}")
+                from concurrent.futures import as_completed
+                for future in as_completed(futures):
+                    if self.download_cancelled:
+                        # Cancel remaining futures
+                        for f in futures:
+                            f.cancel()
+                        break
+                    
+                    if future.result():
+                        downloaded += 1
+                    completed += 1
+                    self.root.after(0, lambda c=completed, t=total: self.progress_var.set(f"Downloading {c}/{t}..."))
+
+            if self.download_cancelled:
+                self.root.after(0, lambda: self.progress_var.set(f"Cancelled - Downloaded {downloaded}/{total}"))
+                return
                 
-                time.sleep(0.2)
-            
             self.root.after(0, lambda: self.download_complete(address, downloaded))
             
         except Exception as e:
@@ -962,6 +1133,98 @@ class RedfinDownloaderGUI:
             if not os.path.exists(property_folder):
                 os.makedirs(property_folder)
             
+            # Extract Zillow property details
+            details = {
+                'address': address,
+                'url': url,
+                'price': 'N/A',
+                'beds': 'N/A',
+                'baths': 'N/A',
+                'sqft': 'N/A',
+                'description': 'No description available'
+            }
+            
+            try:
+                # Attempt to find Zillow's JSON data in script tags (much more reliable)
+                import json
+                script_tag = soup.find('script', id='__NEXT_DATA__')
+                if script_tag:
+                    data = json.loads(script_tag.string)
+                    try:
+                        # Navigate the complex Zillow JSON structure
+                        # CRITICAL: gdpClientCache is often a STRING of JSON, not a dict
+                        gdp_raw = data.get('props', {}).get('pageProps', {}).get('componentProps', {}).get('gdpClientCache', '{}')
+                        
+                        gdp_data = {}
+                        if isinstance(gdp_raw, str):
+                            gdp_data = json.loads(gdp_raw)
+                        else:
+                            gdp_data = gdp_raw
+                        
+                        # Find the key that contains property data (e.g., "ForSalePriorityQuery...")
+                        cache_key = next((k for k in gdp_data.keys() if 'PriorityQuery' in k), None)
+                        
+                        if cache_key:
+                            prop = gdp_data[cache_key].get('property', {})
+                            
+                            if details['price'] == 'N/A' and prop.get('price'):
+                                details['price'] = f"${prop.get('price', 0):,}"
+                            if details['beds'] == 'N/A' and prop.get('bedrooms'):
+                                details['beds'] = str(prop.get('bedrooms'))
+                            if details['baths'] == 'N/A' and prop.get('bathrooms'):
+                                details['baths'] = str(prop.get('bathrooms'))
+                            if details['sqft'] == 'N/A' and prop.get('livingArea'):
+                                details['sqft'] = f"{prop.get('livingArea', 0):,}"
+                            if details['description'] == 'No description available' and prop.get('description'):
+                                details['description'] = prop.get('description')
+                    except Exception as e:
+                        print(f"Zillow JSON parsing error: {e}")
+
+                # Fallback to HTML parsing if JSON failed or missed something
+                if details['price'] == 'N/A':
+                    price_tag = soup.find(['span', 'div'], {'data-testid': 'price'})
+                    if price_tag: details['price'] = price_tag.get_text(strip=True)
+                
+                # Improved HTML stats fallback (Zillow uses same test-id for all 3 stats)
+                if details['beds'] == 'N/A' or details['baths'] == 'N/A' or details['sqft'] == 'N/A':
+                    stat_containers = soup.find_all(['div', 'span'], {'data-testid': 'bed-bath-sqft-fact-container'})
+                    for container in stat_containers:
+                        text = container.get_text(separator=' ').lower()
+                        # Extract the first number found in this specific container
+                        num_match = re.search(r'([\d,]+)', text)
+                        if num_match:
+                            val = num_match.group(1)
+                            if 'bed' in text and details['beds'] == 'N/A': details['beds'] = val
+                            elif 'bath' in text and details['baths'] == 'N/A': details['baths'] = val
+                            elif 'sq' in text and details['sqft'] == 'N/A': details['sqft'] = val
+
+                # Final fallback for stats string like "3 bd 2 ba 1,752 sqft"
+                if details['beds'] == 'N/A' or details['sqft'] == 'N/A':
+                    stats_container = soup.find('div', {'data-testid': 'bed-bath-sqft-facts'}) or \
+                                      soup.find('p', class_='ds-bed-bath-living-area')
+                    if stats_container:
+                        stats_text = stats_container.get_text(separator=' ').lower()
+                        beds_match = re.search(r'(\d+)\s*(?:bd|bed)', stats_text)
+                        baths_match = re.search(r'(\d+)\s*(?:ba|bath)', stats_text)
+                        sqft_match = re.search(r'([\d,]+)\s*sqft', stats_text)
+                        if beds_match and details['beds'] == 'N/A': details['beds'] = beds_match.group(1)
+                        if baths_match and details['baths'] == 'N/A': details['baths'] = baths_match.group(1)
+                        if sqft_match and details['sqft'] == 'N/A': details['sqft'] = sqft_match.group(1)
+
+                if details['description'] == 'No description available':
+                    desc_tag = soup.find('p', {'data-testid': 'main-content'}) or \
+                               soup.find('div', {'data-testid': 'description'})
+                    if desc_tag: details['description'] = desc_tag.get_text(strip=True)
+
+            except Exception as e:
+                print(f"Error extracting Zillow property details: {e}")
+                
+            # Save details to JSON file
+            import json
+            details_file = os.path.join(property_folder, 'property_details.json')
+            with open(details_file, 'w') as f:
+                json.dump(details, f, indent=2)
+            
             # Extract Zillow images
             images = []
             zillow_pattern = r'https://photos\.zillowstatic\.com/fp/([a-f0-9]+)-(?:cc_ft_\d+|uncropped_scaled_within_\d+_\d+)'
@@ -991,19 +1254,16 @@ class RedfinDownloaderGUI:
                 self.root.after(0, lambda: self.download_error("No images found on this Zillow page"))
                 return
             
+            # Download images using ThreadPool
             downloaded = 0
             total = len(images)
             
-            for idx, photo_id in enumerate(images, 1):
-                # Check if download was cancelled
+            def download_zillow_task(item):
+                idx, photo_id = item
                 if self.download_cancelled:
-                    self.root.after(0, lambda: self.progress_var.set(f"Cancelled - Downloaded {downloaded}/{total}"))
-                    return
-                    
-                self.root.after(0, lambda i=idx, t=total: self.progress_var.set(f"Downloading {i}/{t}..."))
+                    return False
                 
                 size_options = ['cc_ft_1536', 'cc_ft_1344', 'cc_ft_960', 'uncropped_scaled_within_1536_1024']
-                success = False
                 
                 for size in size_options:
                     try:
@@ -1011,38 +1271,47 @@ class RedfinDownloaderGUI:
                         filepath = os.path.join(property_folder, f"{idx:03d}_{photo_id}.webp")
                         
                         if os.path.exists(filepath):
-                            downloaded += 1
-                            success = True
-                            break
+                            return True
                         
                         img_response = requests.get(img_url, headers=headers, timeout=10)
                         if img_response.status_code == 200 and len(img_response.content) > 1000:
                             with open(filepath, 'wb') as f:
                                 f.write(img_response.content)
-                            downloaded += 1
-                            success = True
-                            print(f"Downloaded: {img_url}")
-                            break
+                            return True
                         else:
+                            # Try JPG fallback
                             img_url_jpg = img_url.replace('.webp', '.jpg')
                             img_response = requests.get(img_url_jpg, headers=headers, timeout=10)
                             if img_response.status_code == 200 and len(img_response.content) > 1000:
                                 filepath = filepath.replace('.webp', '.jpg')
                                 with open(filepath, 'wb') as f:
                                     f.write(img_response.content)
-                                downloaded += 1
-                                success = True
-                                print(f"Downloaded: {img_url_jpg}")
-                                break
-                    except Exception as e:
-                        print(f"Error downloading {img_url}: {e}")
+                                return True
+                    except:
                         continue
+                return False
+
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(download_zillow_task, item): item for item in enumerate(images, 1)}
+                completed = 0
                 
-                if not success:
-                    print(f"Could not download image {idx}: {photo_id}")
+                from concurrent.futures import as_completed
+                for future in as_completed(futures):
+                    if self.download_cancelled:
+                        # Cancel remaining futures
+                        for f in futures:
+                            f.cancel()
+                        break
+                    
+                    if future.result():
+                        downloaded += 1
+                    completed += 1
+                    self.root.after(0, lambda c=completed, t=total: self.progress_var.set(f"Downloading {c}/{t}..."))
+
+            if self.download_cancelled:
+                self.root.after(0, lambda: self.progress_var.set(f"Cancelled - Downloaded {downloaded}/{total}"))
+                return
                 
-                time.sleep(0.2)
-            
             self.root.after(0, lambda: self.download_complete(address, downloaded))
             
         except Exception as e:
@@ -1075,17 +1344,104 @@ class RedfinDownloaderGUI:
     def prompt_update(self, new_version, release_data):
         """Prompt user to update to new version."""
         release_notes = release_data.get('body', 'No release notes available.')
-        download_url = release_data.get('html_url', '')
         
-        message = f"A new version is available!\n\n"
-        message += f"Current version: {self.version}\n"
-        message += f"Latest version: {new_version}\n\n"
-        message += f"Release Notes:\n{release_notes[:200]}...\n\n"
-        message += "Would you like to visit the download page?"
+        message = f"A new version ({new_version}) is available!\n\n"
+        message += f"Release Notes:\n{release_notes[:300]}...\n\n"
+        message += "Would you like to auto-update now?\n(The app will restart after updating)"
         
         if messagebox.askyesno("Update Available", message):
-            import webbrowser
-            webbrowser.open(download_url)
+            self.apply_update(release_data)
+    
+    def apply_update(self, release_data):
+        """Download and apply the update."""
+        def update_thread():
+            try:
+                self.root.after(0, lambda: self.progress_var.set("Downloading update..."))
+                
+                # Try to find a zip asset, otherwise use the source code zip
+                assets = release_data.get('assets', [])
+                download_url = None
+                
+                for asset in assets:
+                    if asset.get('name', '').endswith('.zip'):
+                        download_url = asset.get('browser_download_url')
+                        break
+                
+                if not download_url:
+                    download_url = release_data.get('zipball_url')
+                
+                if not download_url:
+                    self.root.after(0, lambda: messagebox.showerror("Update Error", "Could not find download link."))
+                    return
+                
+                # Download update
+                response = requests.get(download_url, stream=True)
+                response.raise_for_status()
+                
+                update_zip = "update_temp.zip"
+                with open(update_zip, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                self.root.after(0, lambda: self.progress_var.set("Extracting update..."))
+                
+                # Extract zip
+                import zipfile
+                import shutil
+                
+                extract_path = "update_extracted"
+                if os.path.exists(extract_path):
+                    shutil.rmtree(extract_path)
+                
+                with zipfile.ZipFile(update_zip, 'r') as zip_ref:
+                    zip_ref.extractall(extract_path)
+                
+                # Move files from extracted folder (GitHub zip usually has a subfolder)
+                subfolders = [f for f in os.listdir(extract_path) if os.path.isdir(os.path.join(extract_path, f))]
+                if subfolders:
+                    src_dir = os.path.join(extract_path, subfolders[0])
+                    for item in os.listdir(src_dir):
+                        s = os.path.join(src_dir, item)
+                        d = os.path.join(".", item)
+                        if os.path.isdir(s):
+                            if os.path.exists(d):
+                                shutil.rmtree(d)
+                            shutil.copytree(s, d)
+                        else:
+                            shutil.copy2(s, d)
+                
+                # Cleanup
+                os.remove(update_zip)
+                shutil.rmtree(extract_path)
+                
+                self.root.after(0, lambda: messagebox.showinfo("Update Complete", "Application updated successfully! The app will now restart."))
+                
+                # Restart
+                self.root.after(0, self.restart_app)
+                
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Update Error", f"Failed to apply update: {e}"))
+                self.root.after(0, lambda: self.progress_var.set("System Ready"))
+        
+        thread = threading.Thread(target=update_thread)
+        thread.daemon = True
+        thread.start()
+
+    def restart_app(self):
+        """Restart the current application."""
+        import sys
+        import os
+        
+        python = sys.executable
+        if sys.platform == 'win32':
+            # On Windows, start a new process and exit
+            os.startfile("Start.bat")
+        else:
+            # On Linux/Mac, use execv
+            os.execv(python, [python] + sys.argv)
+        
+        self.root.destroy()
+        sys.exit()
     
     def manual_update_check(self):
         """Manually check for updates (triggered by button)."""
@@ -1129,8 +1485,8 @@ class RedfinDownloaderGUI:
         self.url_entry.insert(0, "Enter Redfin or Zillow URL...")
         
         # Update stats
-        if hasattr(self, 'stats_label'):
-            self.stats_label.config(text=f"Last Download: {count} images | Version {self.version}")
+        if hasattr(self, 'footer_stats_label'):
+            self.footer_stats_label.config(text=f"Last Download: {count} images | Version {self.version}")
     
     def download_error(self, error_msg):
         """Handle download error."""
