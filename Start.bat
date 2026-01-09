@@ -67,5 +67,3 @@ echo.
 
 REM Run the script
 python redfin_gui.py
-
-pause

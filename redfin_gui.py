@@ -59,6 +59,17 @@ class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
         self.version = "1.2"
+        
+        # Performance & DPI Optimizations for Windows
+        try:
+            from ctypes import windll
+            windll.shcore.SetProcessDpiAwareness(1)
+        except:
+            pass
+            
+        # Optimize Tcl performance
+        self.root.tk.call('tk', 'scaling', 1.33) # Match standard 96dpi scaling
+        
         self.root.title(f"Tonys Redfin Image Downloader v{self.version}")
         self.root.geometry("1400x900")
         
@@ -145,110 +156,154 @@ class RedfinDownloaderGUI:
                         troughcolor=self.colors['card_bg'],
                         borderwidth=0)
         
-    def setup_ui(self):
-        # Create main container with two panes
-        main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Exit Button Styling (Red)
+        style.configure("Exit.TButton", 
+                        background="#d13438", 
+                        foreground="white", 
+                        borderwidth=0, 
+                        font=("Segoe UI", 10, "bold"),
+                        padding=(10, 5))
+        style.map("Exit.TButton", 
+                  background=[('active', '#e81123'), ('disabled', '#444444')])
         
-        # Left panel - Download & Property List
-        left_frame = ttk.Frame(main_paned, width=400, padding=10)
-        main_paned.add(left_frame, weight=0)  # Keep left panel fixed size
+        # New Treeview Styling (Explorer style)
+        style.configure("Treeview", 
+                        background=self.colors['card_bg'], 
+                        foreground=self.colors['fg'],
+                        fieldbackground=self.colors['card_bg'],
+                        borderwidth=0,
+                        font=("Segoe UI", 10),
+                        rowheight=35)
+        style.map("Treeview", 
+                  background=[('selected', self.colors['accent'])],
+                  foreground=[('selected', 'white')])
+        
+        style.configure("Treeview.Heading", 
+                        background=self.colors['bg'], 
+                        foreground=self.colors['accent'], 
+                        font=("Segoe UI", 9, "bold"),
+                        borderwidth=0)
+        
+    def setup_ui(self):
+        # Create main container
+        main_container = ttk.Frame(self.root)
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Two-pane window
+        main_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        
+        # Left panel - Download & Explorer
+        left_frame = ttk.Frame(main_paned, padding=12)
+        main_paned.add(left_frame, weight=1)
         
         # Right panel - Gallery Viewer
-        right_frame = ttk.Frame(main_paned, padding=10)
-        main_paned.add(right_frame, weight=3)
+        right_frame = ttk.Frame(main_paned, padding=12)
+        main_paned.add(right_frame, weight=5)
         
         # === LEFT PANEL ===
         
+        # Title/Logo area
+        logo_label = ttk.Label(left_frame, text="TONYS DOWNLOADER", font=("Segoe UI Black", 14), foreground=self.colors['fg'])
+        logo_label.pack(anchor=tk.W, pady=(0, 20))
+        
         # Download section
-        download_frame = ttk.LabelFrame(left_frame, text=" DOWNLOAD ", padding=15)
-        download_frame.pack(fill=tk.X, pady=(0, 15))
+        download_section = ttk.Frame(left_frame)
+        download_section.pack(fill=tk.X, pady=(0, 25))
         
-        ttk.Label(download_frame, text="Redfin URL", style="Sub.TLabel").pack(anchor=tk.W)
-        self.url_entry = ttk.Entry(download_frame, width=50)
-        self.url_entry.pack(fill=tk.X, pady=(5, 15))
+        self.url_entry = ttk.Entry(download_section)
+        # Custom placeholder behavior
+        self.url_entry.insert(0, "Enter Redfin URL...")
+        self.url_entry.bind('<FocusIn>', lambda e: self.url_entry.delete(0, tk.END) if self.url_entry.get() == "Enter Redfin URL..." else None)
+        self.url_entry.pack(fill=tk.X, pady=(0, 10), ipady=5)
         
-        self.download_btn = ttk.Button(download_frame, text="START DOWNLOAD", command=self.start_download)
-        self.download_btn.pack(fill=tk.X)
+        self.download_btn = ttk.Button(download_section, text=" ↓  START DOWNLOAD", command=self.start_download)
+        self.download_btn.pack(fill=tk.X, ipady=5)
         
-        # Progress section
-        progress_frame = ttk.Frame(download_frame)
-        progress_frame.pack(fill=tk.X, pady=(15, 0))
-        
+        # Progress section (Subtle)
         self.progress_var = tk.StringVar(value="System Ready")
-        self.status_label = ttk.Label(progress_frame, textvariable=self.progress_var, style="Sub.TLabel")
-        self.status_label.pack(anchor=tk.W)
+        self.status_label = ttk.Label(download_section, textvariable=self.progress_var, style="Sub.TLabel")
+        self.status_label.pack(anchor=tk.W, pady=(10, 0))
         
-        self.progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
+        self.progress_bar = ttk.Progressbar(download_section, mode='indeterminate')
         self.progress_bar.pack(fill=tk.X, pady=(5, 0))
         
-        # Properties list section
-        properties_frame = ttk.LabelFrame(left_frame, text=" LIBRARY ", padding=15)
-        properties_frame.pack(fill=tk.BOTH, expand=True)
+        # Explorer section
+        explorer_label = ttk.Label(left_frame, text="PROPERTY ADDRESSES", style="Sub.TLabel")
+        explorer_label.pack(anchor=tk.W, pady=(10, 5))
         
-        # Scrollable listbox
-        list_container = ttk.Frame(properties_frame)
-        list_container.pack(fill=tk.BOTH, expand=True, pady=(5, 10))
+        explorer_container = ttk.Frame(left_frame)
+        explorer_container.pack(fill=tk.BOTH, expand=True)
         
-        scrollbar = ttk.Scrollbar(list_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        v_scrollbar = ttk.Scrollbar(explorer_container)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.properties_listbox = tk.Listbox(
-            list_container, 
-            yscrollcommand=scrollbar.set,
-            bg=self.colors['card_bg'],
-            fg=self.colors['fg'],
-            selectbackground=self.colors['accent'],
-            selectforeground='white',
-            borderwidth=0,
-            highlightthickness=0,
-            font=("Segoe UI", 10),
-            activestyle='none'
-        )
-        self.properties_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.properties_listbox.yview)
+        h_scrollbar = ttk.Scrollbar(explorer_container, orient=tk.HORIZONTAL)
+        h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         
-        self.properties_listbox.bind('<<ListboxSelect>>', self.on_property_select)
+        # Using Treeview for explorer look
+        self.explorer_tree = ttk.Treeview(explorer_container, show='tree', selectmode='browse', 
+                                          yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        self.explorer_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Refresh button
-        ttk.Button(properties_frame, text="REFRESH LIST", command=self.refresh_properties).pack(fill=tk.X)
+        v_scrollbar.config(command=self.explorer_tree.yview)
+        h_scrollbar.config(command=self.explorer_tree.xview)
+        
+        # Auto-configure column to stretch
+        self.explorer_tree.column("#0", stretch=True, width=300)
+        
+        self.explorer_tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+        
+        # Refresh container
+        button_frame = ttk.Frame(left_frame)
+        button_frame.pack(fill=tk.X, pady=(15, 0))
+        
+        ttk.Button(button_frame, text=" 🔄  REFRESH LIBRARY", command=self.refresh_properties).pack(fill=tk.X)
         
         # === RIGHT PANEL - GALLERY VIEWER ===
         
-        # Header with property name
-        header_frame = ttk.Frame(right_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 20))
+        # Top Gallery Controls
+        gallery_header = ttk.Frame(right_frame)
+        gallery_header.pack(fill=tk.X, pady=(0, 20))
         
-        self.property_label = ttk.Label(header_frame, text=f"Tonys Redfin Downloader v{self.version}", style="Header.TLabel")
+        self.property_label = ttk.Label(gallery_header, text="Ready to browse", style="Header.TLabel")
         self.property_label.pack(side=tk.LEFT)
         
-        ttk.Button(header_frame, text="OPEN IN EXPLORER", command=self.open_folder).pack(side=tk.RIGHT)
+        # Right aligned controls
+        controls_frame = ttk.Frame(gallery_header)
+        controls_frame.pack(side=tk.RIGHT)
+        
+        # Mock buttons matching screenshot layout
+        for txt in ["Sort by: Date", "Filter: All", "View: Grid"]:
+            btn = ttk.Button(controls_frame, text=txt, style="TButton")
+            btn.pack(side=tk.LEFT, padx=3)
+            
+        # Exit button placed to the right of View Grid
+        exit_btn = ttk.Button(controls_frame, text="Exit", style="Exit.TButton", command=self.root.destroy)
+        exit_btn.pack(side=tk.LEFT, padx=3)
+            
+        ttk.Button(gallery_header, text=" 📂  EXPLORER", command=self.open_folder).pack(side=tk.RIGHT, padx=10)
         
         # Info bar
         info_frame = ttk.Frame(right_frame)
         info_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.image_counter = ttk.Label(info_frame, text="", style="Sub.TLabel")
+        self.image_counter = ttk.Label(info_frame, text="0 images loaded", style="Sub.TLabel")
         self.image_counter.pack(side=tk.LEFT)
         
-        # Zoom control
         zoom_frame = ttk.Frame(info_frame)
         zoom_frame.pack(side=tk.RIGHT)
         
-        ttk.Label(zoom_frame, text="Thumbnail Size:", style="Sub.TLabel").pack(side=tk.LEFT, padx=5)
-        
+        ttk.Label(zoom_frame, text="View size:", style="Sub.TLabel").pack(side=tk.LEFT, padx=5)
         self.zoom_slider = ttk.Scale(zoom_frame, from_=150, to=800, orient=tk.HORIZONTAL, 
                                       command=self.on_zoom_change, length=150)
         self.zoom_slider.pack(side=tk.LEFT, padx=5)
-        
         self.zoom_label = ttk.Label(zoom_frame, text="400px", style="Sub.TLabel")
         self.zoom_label.pack(side=tk.LEFT, padx=(5, 0))
-        
-        # Set initial value after labels are created
         self.zoom_slider.set(400)
         
-        # Gallery canvas with scrollbar
-        gallery_outer = ttk.Frame(right_frame, relief="flat")
+        # Gallery Area
+        gallery_outer = ttk.Frame(right_frame)
         gallery_outer.pack(fill=tk.BOTH, expand=True)
         
         gallery_scrollbar = ttk.Scrollbar(gallery_outer, orient=tk.VERTICAL)
@@ -264,19 +319,25 @@ class RedfinDownloaderGUI:
         self.gallery_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         gallery_scrollbar.config(command=self.gallery_canvas.yview)
         
-        # Frame inside canvas to hold thumbnails
         self.gallery_container = ttk.Frame(self.gallery_canvas)
         self.gallery_canvas_window = self.gallery_canvas.create_window((0, 0), window=self.gallery_container, anchor=tk.NW)
         
-        # Update scroll region when container size changes
         self.gallery_container.bind('<Configure>', lambda e: self.gallery_canvas.configure(scrollregion=self.gallery_canvas.bbox("all")))
-        
-        # Bind canvas width changes to update gallery layout
         self.gallery_canvas.bind('<Configure>', self.on_gallery_resize)
-        
-        # Mouse wheel scrolling
         self.gallery_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
         
+        # Bottom Status Bar
+        status_bar = tk.Frame(self.root, bg=self.colors['accent'], height=25)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.stats_label = tk.Label(status_bar, text=f"Ready | Version {self.version} | Connected", 
+                                    bg=self.colors['accent'], fg="white", font=("Segoe UI", 8, "bold"), padx=10)
+        self.stats_label.pack(side=tk.LEFT)
+        
+        # Add tiny resize grip look-alike
+        tk.Label(status_bar, text=" ● Tonys Downloader Engine Active ", bg=self.colors['accent'], fg="white", 
+                 font=("Segoe UI", 8), padx=10).pack(side=tk.RIGHT)
+
     def on_zoom_change(self, value):
         """Handle zoom slider change."""
         if not hasattr(self, 'zoom_label'):
@@ -315,8 +376,9 @@ class RedfinDownloaderGUI:
     
     def refresh_properties(self):
         """Refresh the list of downloaded properties."""
-        self.properties_listbox.delete(0, tk.END)
-        
+        for item in self.explorer_tree.get_children():
+            self.explorer_tree.delete(item)
+            
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
             return
@@ -328,18 +390,27 @@ class RedfinDownloaderGUI:
         
         for prop in properties:
             prop_path = os.path.join(self.output_folder, prop)
-            image_count = len(self.get_image_files(prop_path))
-            self.properties_listbox.insert(tk.END, f"{prop} ({image_count} images)")
+            images = self.get_image_files(prop_path)
+            image_count = len(images)
+            
+            # Insert property node
+            item_id = self.explorer_tree.insert('', tk.END, text=f" 🏠 {prop}", values=(prop,))
+            # Insert a "Photos" sub-node to look like the mockup explorer
+            self.explorer_tree.insert(item_id, tk.END, text=f"   📸 Photos ({image_count})", tags=('subnode',))
     
-    def on_property_select(self, event):
-        """Handle property selection from the list."""
-        selection = self.properties_listbox.curselection()
+    def on_tree_select(self, event):
+        """Handle property selection from the tree."""
+        selection = self.explorer_tree.selection()
         if not selection:
             return
-        
-        selected_text = self.properties_listbox.get(selection[0])
-        property_name = selected_text.rsplit(' (', 1)[0]
-        
+            
+        item = selection[0]
+        # If user clicks a subnode, get parent's text
+        parent = self.explorer_tree.parent(item)
+        if parent:
+            item = parent
+            
+        property_name = self.explorer_tree.item(item, "text").split("🏠 ", 1)[-1].strip()
         self.load_property_images(property_name)
     
     def load_property_images(self, property_name):
@@ -680,13 +751,18 @@ class RedfinDownloaderGUI:
     def download_complete(self, address, count):
         """Handle successful download completion."""
         self.progress_bar.stop()
-        self.progress_var.set("Download complete!")
+        self.progress_var.set("Ready")
         self.download_btn.config(state=tk.NORMAL)
         
         messagebox.showinfo("Success", f"Downloaded {count} images!\n\nSaved to: {address}")
         
         self.refresh_properties()
         self.url_entry.delete(0, tk.END)
+        self.url_entry.insert(0, "Enter Redfin URL...")
+        
+        # Update stats
+        if hasattr(self, 'stats_label'):
+            self.stats_label.config(text=f"Last Download: {count} images | Version {self.version}")
     
     def download_error(self, error_msg):
         """Handle download error."""
