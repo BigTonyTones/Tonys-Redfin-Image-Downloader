@@ -59,7 +59,7 @@ import glob
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.8.3"
+        self.version = "1.8.4"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -431,7 +431,7 @@ class RedfinDownloaderGUI:
         return sorted(list(set(images)))  # Remove any duplicates and sort
     
     def add_right_click_menu(self, widget):
-        """Add right-click context menu to a widget."""
+        """Add right-click context menu to a widget (Mac/Windows/Linux compatible)."""
         menu = tk.Menu(self.root, tearoff=0)
         menu.add_command(label="Cut", command=lambda: widget.event_generate("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: widget.event_generate("<<Copy>>"))
@@ -444,7 +444,11 @@ class RedfinDownloaderGUI:
             menu.tk_popup(event.x_root, event.y_root)
             return "break"
 
+        # Windows/Linux
         widget.bind("<Button-3>", show_menu)
+        # MacOS
+        widget.bind("<Button-2>", show_menu)
+        widget.bind("<Control-Button-1>", show_menu)
 
     def refresh_properties(self):
         """Refresh the list of downloaded properties."""
