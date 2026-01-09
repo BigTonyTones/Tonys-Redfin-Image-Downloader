@@ -4,6 +4,13 @@ I made this tool to quickly grab high-res photos from Redfin and Zillow listings
 
 ![App Preview](assets/screenshot.png)
 
+## 📥 Installation
+
+```bash
+git clone https://github.com/BigTonyTones/Tonys-Redfin-Zillow-Image-Downloader.git
+cd Tonys-Redfin-Zillow-Image-Downloader
+```
+
 ### What it does:
 - **Grabs High-Res Photos**: Pulls the best quality images directly from Redfin and Zillow.
 - **Built-in Gallery**: You can browse your downloads right inside the app.
