@@ -59,7 +59,7 @@ import glob
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.8.5"
+        self.version = "1.8.6"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -491,9 +491,9 @@ class RedfinDownloaderGUI:
             sqft = details.get('sqft', '—')
             
             # Insert property node with Price and Sq Ft columns
-            item_id = self.explorer_tree.insert('', tk.END, text=f" 🏠 {prop}", values=(prop, price, sqft))
+            item_id = self.explorer_tree.insert('', tk.END, text=f" 🏠 {prop}", values=(price, sqft))
             # Insert a "Photos" sub-node
-            self.explorer_tree.insert(item_id, tk.END, text=f"   📸 Photos ({image_count})", values=(prop, price, sqft), tags=('subnode',))
+            self.explorer_tree.insert(item_id, tk.END, text=f"   📸 Photos ({image_count})", values=(price, sqft), tags=('subnode',))
     
     def on_tree_select(self, event):
         """Handle property selection from the tree."""
