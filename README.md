@@ -1,4 +1,4 @@
-# Tonys Redfin Zillow Image Downloader v1.9.3
+# Tonys Redfin Zillow Image Downloader v1.9.4
 
 A high-performance tool designed to capture high-res photos from Redfin and Zillow listings instantly. Featuring a sleek dark theme, multi-threaded downloading, and automatic property metadata extraction.
 

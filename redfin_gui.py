@@ -54,12 +54,14 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageTk
+from PIL import Image, ImageTk
 import glob
+import webbrowser
 
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.9.3"
+        self.version = "1.9.4"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -221,9 +223,18 @@ class RedfinDownloaderGUI:
         logo_label = ttk.Label(left_frame, text="TONYS IMAGE DOWNLOADER", font=("Segoe UI Black", 13), foreground=self.colors['fg'])
         logo_label.pack(anchor=tk.W, pady=(0, 5))
         
-        # Subtitle
-        subtitle_label = ttk.Label(left_frame, text="Redfin & Zillow", font=("Segoe UI", 9), foreground=self.colors['text_dim'])
-        subtitle_label.pack(anchor=tk.W, pady=(0, 20))
+        # Subtitle & Links
+        header_frame = ttk.Frame(left_frame)
+        header_frame.pack(anchor=tk.W, fill=tk.X, pady=(0, 20))
+        
+        subtitle_label = ttk.Label(header_frame, text="Redfin & Zillow", font=("Segoe UI", 9), foreground=self.colors['text_dim'])
+        subtitle_label.pack(side=tk.LEFT)
+        
+        ttk.Label(header_frame, text=" | ", font=("Segoe UI", 9), foreground=self.colors['text_dim']).pack(side=tk.LEFT)
+        
+        github_link = ttk.Label(header_frame, text="View on GitHub", font=("Segoe UI", 9, "bold"), foreground=self.colors['accent'], cursor="hand2")
+        github_link.pack(side=tk.LEFT)
+        github_link.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/BigTonyTones/Tonys-Redfin-Zillow-Image-Downloader"))
         
         # Download section
         download_section = ttk.Frame(left_frame)
