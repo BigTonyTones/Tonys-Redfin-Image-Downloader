@@ -59,7 +59,7 @@ import glob
 class RedfinDownloaderGUI:
     def __init__(self, root):
         self.root = root
-        self.version = "1.8.4"
+        self.version = "1.8.5"
         
         # Performance & DPI Optimizations for Windows
         try:
@@ -262,11 +262,18 @@ class RedfinDownloaderGUI:
         explorer_container.pack(fill=tk.BOTH, expand=True)
         
         # Using Treeview for explorer look (Removed visible scrollbars for cleaner look)
-        self.explorer_tree = ttk.Treeview(explorer_container, show='tree', selectmode='browse')
+        self.explorer_tree = ttk.Treeview(explorer_container, columns=('price', 'sqft'), show='tree headings', selectmode='browse')
         self.explorer_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        # Auto-configure column to stretch
-        self.explorer_tree.column("#0", stretch=True, width=300)
+        # Configure headings
+        self.explorer_tree.heading('#0', text=' Address')
+        self.explorer_tree.heading('price', text=' Price')
+        self.explorer_tree.heading('sqft', text=' Sq Ft')
+        
+        # Configure columns
+        self.explorer_tree.column("#0", stretch=True, width=350)
+        self.explorer_tree.column("price", width=120, anchor=tk.W)
+        self.explorer_tree.column("sqft", width=100, anchor=tk.W)
         
         self.explorer_tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         
@@ -464,15 +471,29 @@ class RedfinDownloaderGUI:
         
         properties.sort(reverse=True)
         
+        import json
         for prop in properties:
             prop_path = os.path.join(self.output_folder, prop)
             images = self.get_image_files(prop_path)
             image_count = len(images)
             
-            # Insert property node
-            item_id = self.explorer_tree.insert('', tk.END, text=f" 🏠 {prop}", values=(prop,))
-            # Insert a "Photos" sub-node to look like the mockup explorer
-            self.explorer_tree.insert(item_id, tk.END, text=f"   📸 Photos ({image_count})", tags=('subnode',))
+            # Load stats from JSON if it exists
+            details = {}
+            details_file = os.path.join(prop_path, 'property_details.json')
+            if os.path.exists(details_file):
+                try:
+                    with open(details_file, 'r') as f:
+                        details = json.load(f)
+                except:
+                    pass
+            
+            price = details.get('price', '—')
+            sqft = details.get('sqft', '—')
+            
+            # Insert property node with Price and Sq Ft columns
+            item_id = self.explorer_tree.insert('', tk.END, text=f" 🏠 {prop}", values=(prop, price, sqft))
+            # Insert a "Photos" sub-node
+            self.explorer_tree.insert(item_id, tk.END, text=f"   📸 Photos ({image_count})", values=(prop, price, sqft), tags=('subnode',))
     
     def on_tree_select(self, event):
         """Handle property selection from the tree."""
